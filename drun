@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+CURR_DIR="$(pwd)"
+WORK_DIR="/mnt/host/${CURR_DIR}"
+if [[ -t 0 ]]; then
+  TTY_FLAG='-t'
+else
+  TTY_FLAG=''
+fi
+
+docker run --rm -i           \
+  ${TTY_FLAG}                \
+  ${DEPLOY_KEYS_FLAG}        \
+  -v "$CURR_DIR:${WORK_DIR}" \
+  -w "${WORK_DIR}"           \
+  -e 'PS1=\W > \h \$ '       \
+  "$@"

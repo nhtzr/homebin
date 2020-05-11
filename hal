@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+declare -a HAL_OPT
+
+CONTAINER_NAME="${CONTAINER_NAME:-armory-halyard}"
+HAL_FOLDER="${HAL_FOLDER:-$HOME/.hal}"
+HAL_OPT=()
+# HAL_OPT=(-e 'REGION='                \
+#          -e 'AWS_ACCESS_KEY_ID='     \
+#          -e 'AWS_SECRET_ACCESS_KEY=' \
+#          -e 'AWS_SESSION_TOKEN=')
+HAL_IMAGE='docker.io/armory/halyard-armory:1.8.3'
+
+if test -z "$(docker ps -q --filter name="$CONTAINER_NAME" || true)" &&
+  test "${1:-}" != shutdown; then
+  docker run --name "$CONTAINER_NAME" "${HAL_OPT[@]}" \
+      -e AWS_SDK_LOAD_CONFIG=1 \
+      -e AWS_PROFILE=default \
+      -v "$HAL_FOLDER":/home/spinnaker/.hal           \
+      -v ~/.kube:/home/spinnaker/.kube                \
+      -v ~/.aws:/home/spinnaker/.aws                  \
+      --rm -d "$HAL_IMAGE"
+  echo 'Waiting for halyard daemon ... ' > /dev/stderr
+  docker exec -it "$CONTAINER_NAME" bash -c 'while true; do sleep 0; if nc -z -w5 127.0.0.1 "${halport:-8064}" > /dev/stderr; then break; fi; sleep 2; done'
+fi
+
+docker exec -it "$CONTAINER_NAME" "${@+hal}" "${@-bash}"
+

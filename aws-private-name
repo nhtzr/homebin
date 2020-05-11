@@ -1,0 +1,5 @@
+#!/usr/local/bin/jq -ref
+
+.Reservations[].Instances[].PrivateDnsName
+
+

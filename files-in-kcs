@@ -1,0 +1,15 @@
+#!/usr/local/bin/jq -erf
+
+def decode_($kind):
+  if ($kind == "Secret") then @base64d
+  else . end;
+
+($ARGS.named.key) as $key |
+(.kind) as $kind |
+
+if $key == null then
+  .data | keys
+else
+  .data[$key] | decode_(.kind)
+end
+

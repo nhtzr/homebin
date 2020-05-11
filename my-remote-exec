@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -ueo pipefail
+
+my_host="${1?}"
+my_command=":; ${2?}"
+shift
+shift
+
+ssh "$@" "${my_host}" -- set -ueo pipefail \; "'${my_command}'"
+

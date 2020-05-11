@@ -1,0 +1,31 @@
+#/usr/bin/env bash
+
+usage='config-set.sh <input-file> <key> <value> [ofs] [ifs]'
+_wrapped_awk_source() {
+cat <<'EOF'
+$1 == key {$2 = value; found++}
+{print}
+END {
+  if (found != 1) {
+    print "key \"" key "\" found " found " times in " FILENAME > "/dev/stderr"
+  }
+}
+EOF
+}
+
+set -euo pipefail
+
+input_file="${1?"${usage}"}"
+key="${2?"${usage}"}"
+value="${3?"${usage}"}"
+ofs="${4:- = }"
+ifs="${5:-[[:space:]]*=[[:space:]]*}"
+
+awk \
+  -v'key'="${key}" \
+  -v'value'="${value}" \
+  -v'OFS'="${ofs}" \
+  -F"${ifs}" \
+  -f <(_wrapped_awk_source) \
+  "${input_file}"
+

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+stty -echo;
+printf "Password: ";
+read SSHPASS;
+export SSHPASS
+stty echo;
+
+xargs -I{} ssh-keyscan {}            < "${1?Host list file}" >> ~/.ssh/known_hosts
+xargs -I{} sshpass -e ssh-copy-id {} < "${1?Host list file}"
+

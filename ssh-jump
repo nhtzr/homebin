@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+#-'ec2-user@18.205.80.237'
+# set -- -i ~/.ssh/staging_root_key.pem
+
+bastion="${1:?}"
+server="${2:?}"
+shift 2
+flags="$@"
+ssh -o ProxyCommand="ssh ${flags} -W %h:%p ${bastion}" ${flags} "${server}"
+

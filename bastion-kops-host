@@ -1,0 +1,3 @@
+#!/usr/local/bin/jq -ref
+
+.LoadBalancerDescriptions[]? | select(.LoadBalancerName | startswith("bastion-kops-")).DNSName

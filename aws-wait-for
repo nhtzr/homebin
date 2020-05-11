@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+is_ready() {
+  local instance_id="${1?}"
+  local instance_status=
+
+  instance_status="$(
+    aws ec2 describe-instance-status \
+      --instance-id "$instance_id" |
+      tee /dev/stderr |
+      jq -r '(.InstanceStatuses[] | to_entries[])? | select(.key | endswith("Status")).value.Status' |
+      sort -u |
+      tee /dev/stderr )"
+  test "$instance_status" == 'ok'
+}
+
+jitter() {
+#  printf '%s' "$(($RANDOM % 50 + 75))"
+  printf '100'
+}
+
+instance_id="${1?instance-id}"
+[ -n "${AWS_PROFILE:-}" ] || export AWS_PROFILE="${2?aws-profile}"
+
+factor=1.62
+offset=9.0
+count=0
+until is_ready "$instance_id"
+do
+  let backoff="$( bc <<< "( ${offset} * $(jitter) / 100 + ${factor} ^ ${count} ) / 1" )"
+  echo "waiting for $backoff seconds..." >&2
+  sleep $backoff
+  let count++
+  echo "retrying .. ($count)">&2
+done
+

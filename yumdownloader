@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+[ -n "${WORK_DIR:-}" ] || WORK_DIR="$(pwd)"
+[ -n "${KOJI_DIR:-}" ] || KOJI_DIR="$HOME/.koji"
+[ -n "${KOJI_MOUNT_DIR:-}" ] || KOJI_MOUNT_DIR="$HOME/mnt/koji"
+
+if [ "$1" != 'bash' ]; then
+  set -- yumdownloader $@
+fi
+
+docker run -it --rm \
+  -w "/w" \
+  -v "$WORK_DIR:/w" \
+  -v "$KOJI_DIR:/root/.koji" \
+  -v "$KOJI_MOUNT_DIR:/mnt/koji" \
+  yumdownloader $@

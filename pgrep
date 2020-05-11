@@ -1,0 +1,6 @@
+#!/bin/sh
+
+exp="${1?}"
+shift
+ps "${@}" | grep "{}"
+

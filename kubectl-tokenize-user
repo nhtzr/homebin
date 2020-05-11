@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+KUBEUSER="${KUBEUSER:-$(
+    yq r -j "$KUBECONFIG" |
+      jq -re '
+        .["current-context"] as $current_context |
+        .contexts[] | select(.name == $current_context) | .context.user'
+)}"
+TOKEN="${TOKEN:-$(
+    yq r -j "$KUBECONFIG" |
+      bash -c "$(
+          jq -re '
+            first(.users[] | select(.name == $current_user)).user.exec |
+            ([.command] + .args | map(@sh) | join(" "))
+          ' --arg current_user "$KUBEUSER"
+      )" |
+      jq -re .status.token
+)}"
+
+kubectl config set-credentials "${KUBEUSER}" --token="${TOKEN}"
+

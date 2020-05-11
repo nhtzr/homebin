@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+TARGET=${1?TARGET}
+
+ssh -t -o 'ProxyCommand=ssh -W %h:%p jumphost2.tukcl.intelius.com' ops.tukcl.intelius.com -- sudo ssh `<<<"${TARGET}" sed 's/root-//'`
+

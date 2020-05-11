@@ -1,0 +1,16 @@
+#!/bin/sh
+
+declare SALT  # One time pad
+if [ "${1+x}" = x ]; then
+  SALT="$1"
+else
+  # 64byte = 512bit
+  SALT="$(head -c64 /dev/random)"
+fi
+
+( IFS=; stty -echo; read -r line; printf '%s' "$line" "$SALT"
+) 2>/dev/null |
+  sha512sum | awk '{print $1}' | xxd -r -p |
+  base91 -w0
+echo
+

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Downloads from bintray and extracts into cellar
+
+# Intended as support brew switch <formula> <version>
+#   in case that the given version is no longer available in cellar
+
+# e.g.
+# $0 terraform 0.11.11 should download the following
+#   https://bintray.com/homebrew/bottles/download_file?file_path=terraform-0.11.11.sierra.bottle.tar.gz
+# Which allows brew switch terraform 0.11.11 to succeed
+
+
+set -euo pipefail
+
+[ -n "${CELLAR_PATH:-}" ] || CELLAR_PATH="$(brew --cellar)"
+test -n "${CELLAR_PATH}"
+[ -n "${OSX_VERSION:-}" ] || OSX_VERSION=sierra
+[ -n "${BOTTLE_REPO_DOMAIN:-}" ] || BOTTLE_REPO_DOMAIN=bintray.com
+
+BOTTLE_FORMULA="${1?}"
+BOTTLE_FORMULA="$( brew info "${BOTTLE_FORMULA}" | awk -F: 'NR == 1 {print $1}' )"
+test -n "${BOTTLE_FORMULA}"
+
+BOTTLE_VERSION="${2?}"
+test -n "${BOTTLE_VERSION}"
+
+BOTTLE_FILES_URL="https://${BOTTLE_REPO_DOMAIN}/version/files/homebrew/bottles/${BOTTLE_FORMULA}/${BOTTLE_VERSION}"
+BOTTLE_DOWNLOAD_PATH="$(
+  nvim -c '%normal 0dt/f"D' -c '%print' -es <(
+    set -x;
+    curl '-#L' "${BOTTLE_FILES_URL}" |
+      grep -w 'data-id="downloadRef' |
+      grep -w "${OSX_VERSION}";
+    set +x;
+  )
+)"
+test -n "${BOTTLE_DOWNLOAD_PATH}"
+
+BOTTLE_DOWNLOAD_URL="https://${BOTTLE_REPO_DOMAIN}${BOTTLE_DOWNLOAD_PATH}"
+test -n "${BOTTLE_DOWNLOAD_URL}"
+
+cd "${CELLAR_PATH}"
+set -x
+curl '-#L' "${BOTTLE_DOWNLOAD_URL}" | tar -zx
+set +x
+
+brew switch "${BOTTLE_FORMULA}" "${BOTTLE_VERSION}"
+

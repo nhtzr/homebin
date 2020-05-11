@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+kubectl get deployments -n staging -l 'app in (cdc-postgresql-connector,sink-postgresql-connector,sink-s3-connector)'
+

@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+# Usage: commonmarker [--output FILE] [FILE..]
+# Convert one or more CommonMark files to HTML and write to standard output.
+# If no FILE argument is provided, text will be read from STDIN.
+# If no -o argument is provided, html wil be rendered to STDOUT
+if ARGV.include?('--help') or ARGV.include?('-h')
+  File.read(__FILE__).split("\n").grep(/^# /).each do |line|
+    puts line[2..-1]
+  end
+  exit 0
+end
+
+require 'commonmarker'
+
+active_extensions = [
+  :table,
+  :tasklist,
+  :strikethrough,
+  :autolink
+]
+outputfile = nil
+
+ARGV.delete_if do |arg|
+  if arg =~ /^--output=(.+)$/
+    outputfile = $1
+    true
+  else
+    false
+  end
+end
+
+doc = CommonMarker
+  .render_doc(ARGF.read, 
+              :LIBERAL_HTML_TAG,
+              active_extensions)
+  .to_html([
+    #:GITHUB_PRE_LANG,
+    :UNSAFE,
+    :SOURCEPOS], active_extensions)
+
+if (!outputfile)
+  STDOUT.write(doc)
+else
+  File.open(outputfile,'w') do |s|
+    s.puts doc
+  end
+end
+

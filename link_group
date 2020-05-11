@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -ueo pipefail
+
+error() {
+  echo "${1:-}" &> /dev/stderr
+  return 1
+}
+
+[[ "${PWD}" == */terraform/envs/*   ]] || error 'Current working directory must be an env folder'
+[[ "${PWD}" != */terraform/envs/*/* ]] || error 'Current working directory must be an env folder, not a subfolder'
+
+group="${1?}"
+project_root="../../.."
+group_folder="${project_root}/terraform/groups/${group}"
+
+[ -n "${group:-}" ]                  || error 'argument must be nonempty'
+[ -n "${project_root:-}" ]           || error 'could not determine project root'
+[ -e "${group_folder}" ]             || error "$group does not exist in terraform/groups/"
+
+ln -s "${group_folder}"  ${2:-}
+

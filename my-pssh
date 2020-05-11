@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+
+[ -n "${PSSH_PATH:-}" ] || PSSH_PATH="$HOME/.config/hosts"
+
+pss_which() {
+  local target="${1?Missing target}"
+  if [[ "${target##/}" != "${target}" ]] ||
+     [[ "${target##~}" != "${target}" ]] ||
+     [[ "${target##.}" != "${target}" ]] ; then
+    # target starts with slash dot or tilde
+    # it means we received an abs reference
+    if [[ -e "${target}" ]]; then
+      printf '%s' "${target}"
+      return 0
+    fi
+    return 1
+  fi
+
+  # target is a reference in path
+  local -a DIRS
+  IFS=: DIRS=("$PWD" $PSSH_PATH)
+
+  local cur
+  for dir in "${DIRS[@]}"; do
+    if [[ -z "${dir:-}" ]]; then
+      continue;
+    fi
+
+    cur="${dir%/}/${1?path}"
+    if [[ -e "${cur}" ]]; then
+      printf '%s' "${cur}"
+      return 0
+    fi
+  done
+  return 1  # Not found
+}
+
+HOSTS_FILE="$(pss_which "${1?}")"
+SCRIPT="${2?}"
+shift
+shift
+[ -n "${ENTRYPOINT:-}" ] || ENTRYPOINT=bash
+
+files_newer() {
+  local folder="${1?Missing folder}"
+  local timestamp="${2?Missing timestamp}"
+  find "$folder" -newermt "$timestamp" -type f
+}
+
+pss_output() {
+  local hosts_file="${1?Missing hostsfile}"
+  local timestamp=`date +%Y%m%d' '%H:%M`
+  echo "=== ERRORS ===" > "${hosts_file}.sep"
+  (
+    files_newer "${hosts_file}.out" "${timestamp}"
+    echo "${hosts_file}.sep"
+    files_newer "${hosts_file}.err" "${timestamp}"
+  ) |
+    xargs awk '
+      FILENAME ~ /\.sep$/ {
+        print $0, "§";
+        next
+      }
+
+      {
+        filesize++;
+        gsub(/[^\/]*\//, "", FILENAME);
+        print FILENAME, "§|§", $0;
+      }
+      BEGINFILE { filesize = 0; }
+      ENDFILE   { if (filesize > 1) { print " § "; } }
+    ' |
+    column -t -s '§'
+}
+
+cwrap() {
+  local extra_indent=3
+  local separator='|'
+  local max_ln_size="$(tput cols)"
+  local nl=$'\n'
+
+  local line
+
+  local frst_col
+  local last_col
+  local last_col_length
+  local indent_size
+  local indent_str
+  while IFS= read -r line; do
+    frst_col="${line%%$separator*}"
+    last_col="${line##*$separator}"
+    last_col_length="${#last_col}"
+
+    if test "${last_col}" == "${line}"; then
+      printf '%s\n' "${line}"
+      continue
+    fi
+
+    let indent_size="$(wc -c <<< "$frst_col") + $extra_indent"
+    let remaing_ln_size="$max_ln_size - $indent_size"
+
+    rem_col_pos=0
+    rem_col="${last_col:$rem_col_pos:$remaing_ln_size}"
+
+    printf '%s|%s' "$frst_col" "${rem_col%%$nl}"
+
+    while test "$rem_col_pos" -lt "$last_col_length";do
+      let rem_col_pos+=$remaing_ln_size
+      rem_col="${last_col:$rem_col_pos:$remaing_ln_size}"
+
+      : ${rem_col:-}
+      if test -z "${rem_col:-}" ; then
+        printf '\n' ''
+      else
+        printf '%-'"$indent_size"'s\n%s' '' "${rem_col%%$nl}"
+      fi
+    done
+  done
+}
+
+pssh "$@" -o "${HOSTS_FILE}.out" -e "${HOSTS_FILE}.err" -h "${HOSTS_FILE}" "${ENTRYPOINT}" -euo pipefail -c ":; ${SCRIPT}" &>/dev/null
+pss_output "$HOSTS_FILE" | cwrap
+

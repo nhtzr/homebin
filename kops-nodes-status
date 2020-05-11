@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+[ -n "${AWS_PROFILE:-}" ] || export AWS_PROFILE="${1?}"
+aws ec2 describe-instances | jq '
+  .Reservations[].Instances[]
+    | (.Tags
+        | map( (.key   = .Key)
+             | (.value = .Value))
+        | from_entries.Name)
+        as $name
+    | select($name | contains("kops"))
+    | ((.PrivateDnsName | select(length > 0)) // .InstanceId)
+      as $id
+    | [ $name , $id , .State.Name ]
+    | @tsv' -r |
+  column -t -s $'\t' |
+  sort
+
