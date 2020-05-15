@@ -8,7 +8,7 @@ else
   SALT="$(head -c64 /dev/random)"
 fi
 
-( IFS=; stty -echo; read -r line; printf '%s' "$line" "$SALT"
+( IFS=; stty -echo; read -r line; printf '%s' "$line" "$SALT"; stty echo
 ) 2>/dev/null |
   sha512sum | awk '{print $1}' | xxd -r -p |
   base91 -w0
