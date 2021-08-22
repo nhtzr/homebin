@@ -1,0 +1,5 @@
+#!/usr/bin/env whalebrew
+image: mysql
+entrypoint: [ mysql ]
+volumes:
+- mysql-history:/root
