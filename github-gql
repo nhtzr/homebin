@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+[ -n "${GITHUB_API_TOKEN_PATH:-}"  ] || GITHUB_API_TOKEN_PATH="$HOME/.config/token/github"
+[ -n "${GITHUB_API_URL:-}"         ] || GITHUB_API_URL='https://api.github.com/graphql'
+
+latest_tag() {
+  local auth_header
+
+  versionPrefix="${1:?Version prefix missing e.g. v0.5.}"
+  repo="${2:?repo missing}"
+  owner="${3:?owner missing}"
+  auth_header="$(auth_header)"
+  : "${auth_header:? Missing auth header}"
+
+  curl -H "$auth_header" -sSf "$GITHUB_API_URL" -d @<(
+    jq -nRs --arg owner "$owner" --arg versionPrefix "$versionPrefix" --arg repo "$repo" '.query=input | .variables={$versionPrefix,$repo}'  << 'EOF'
+query($repo: String!, $versionPrefix: String!)
+{
+  repository(owner: $owner, name: $repo) {
+    refs(first: 10, query: $versionPrefix, refPrefix: "refs/tags/", orderBy: {field: ALPHABETICAL, direction: DESC}) {
+      edges {
+        node {
+          name
+        }
+      }
+    }
+  }
+}
+EOF
+) | jq -r 'try(first(.data.repository.refs.edges[].node.name | select(contains("-rc.") | not)))'
+}
+
+main() {
+  local auth_header
+
+  repo="${1:?repo missing}"
+  owner="${2:?owner missing}"
+  amount="${3:-10}"
+  auth_header="$(auth_header)"
+  : "${auth_header:? Missing auth header}"
+
+  while IFS= read -r r; do
+    : "$r"
+    : "${_##release-}"
+    : "${_%%.x}"
+    latest_tag "v${_}." "$repo" "$owner"
+  done < <(releaseBranches "$repo" "$owner" "$auth_header" "$amount")
+}
+
+releaseBranches() {
+  repo="${1:?}"
+  owner="${2:?}"
+  auth_header="${3:?}"
+  amount="${4:-10}"
+
+  curl -H "$auth_header" -sSf "$GITHUB_API_URL" -d @<(
+    ( jq -nRs --argjson amount "$amount" --arg owner "$owner" --arg repo "$repo" '.query=input | .variables={$repo, $owner, $amount}' ) << 'EOF'
+query($owner: String!, $repo: String!, $amount: Int!)
+{
+  repository(owner: $owner, name: $repo) {
+    refs(first: $amount, query: "release-", refPrefix: "refs/heads/", orderBy: {field: ALPHABETICAL, direction: DESC}) {
+      edges {
+        node {
+          name
+        }
+      }
+    }
+  }
+}
+EOF
+) | jq -r 'try(.data.repository.refs.edges[].node.name | select(startswith("release-")))'
+}
+
+auth_header() {
+  if [[ -n "${GITHUB_API_TOKEN:-}" ]]; then
+    echo "Authorization: token $GITHUB_API_TOKEN"
+    return
+  fi
+  if [[ -s "$GITHUB_API_TOKEN_PATH" ]]; then
+    echo "Authorization: token $(cat "$GITHUB_API_TOKEN_PATH")"
+    return
+  fi
+  return 1
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+set -uexo pipefail
+
+main() {
+  aws ssm start-session --target "$(aws ec2-bydns "${1?ec2 dns missing}" | aws-instance-id)"
+}
+
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

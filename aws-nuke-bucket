@@ -1,14 +1,29 @@
 #!/usr/bin/env bash
 
-set -uexo pipefail
-export AWS_PROFILE="${1?}"
-BUCKET="${2?}"
+aws_nuke_bucket() {
+  local bucket
+  local delReq
+
+  bucket="${1?list_object_versions: Missing bucket parameter}"
+  delReq="$(list_object_versions "$bucket")"
+  if test -z "$delReq"; then
+    return
+  fi
+
+  aws s3api delete-objects --bucket "$bucket" --delete "$delReq"
+  aws s3 rb --force "s3://$bucket"
+}
 
 list_object_versions() {
-  aws s3api list-object-versions --bucket "$BUCKET" |
+  local bucket
+
+  bucket="${1?list_object_versions: Missing bucket parameter}"
+  aws s3api list-object-versions --bucket "$bucket" |
     jq '{Objects: [ ( .Versions[]? , .DeleteMarkers[]? ) | {Key:.Key, VersionId : .VersionId}], Quiet: false}'
 }
 
-aws s3api delete-objects --bucket "$BUCKET" --delete "$(list_object_versions)"
-aws s3 rb --force s3://"$BUCKET"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
 

@@ -1,0 +1,11 @@
+#!/bin/sh
+
+main() {
+  until nc -z -w5 localhost "${1:?port missing}" >/dev/stderr; do sleep 1; done
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

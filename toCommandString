@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+main() {
+  if test $# -eq 0; then
+    return
+  fi
+  printf '%q ' "$@"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+
