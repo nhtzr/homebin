@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+main() {
+  find "${LIVERAMP_CODE_DIR:?workdir needed}/api-specs" -name '*.reslang' -exec dirname {} \; |
+    sort -u |
+    awk -F/ 'NF == 8 {print}' |
+    xargs -r -L1 bash -c 'reslang --stdout "$1" | swagger-cli -d validate /dev/stdin' _
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

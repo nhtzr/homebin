@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+awk -F, 'FNR==NR { a[$1]; next } $2 && !($2 in a) {print substr($1, 12)}' \
+  <( git for-each-ref refs/remotes --format="%(refname)" ) \
+  <( git for-each-ref refs/heads --format="%(refname),%(upstream)" ) |
+  xargs -r git branch -d
+

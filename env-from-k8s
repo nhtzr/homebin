@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+per_line() {
+  local JQ_SCRIPT
+  local kind
+  local name
+  local resource
+  local key
+  local curr_val
+  local curr_err
+  JQ_SCRIPT='.kind as $kind | .data[$key] | (values // error("\($key) was not found in \($kind) \($resource)") ) | if $kind == "Secret" then @base64d else . end'
+  kind=secret
+  name="${1:?toenvline name param missing}"
+  resource="${2:?toenvline secret param missing}"
+  key="${3:?toenvline key param missing}"
+  shift;shift;shift #we will allow $@ later
+  curr_err=''
+
+  IFS= read -r -d '' curr_val < <(
+    kubectl get "$kind" "$resource" "$@" -o json | jq -rej "${JQ_SCRIPT:?}" --arg key "$key" --arg resource "$resource" --arg kind "$kind" && printf '%b' '\0'
+  ) || curr_err=true
+
+  if test -n "${curr_err:-}"; then
+    printf '#%s=${%s:?missing}'$'\n' "$name" "$name"
+    return
+  fi
+  if ! [[ "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9_]*$ ]]; then
+    printf '#%s=%q #%s is an invalid bash identifier'$'\n' "$name" "$curr_val" "$name"
+    return
+  fi
+  printf '%s=%q'$'\n' "$name" "$curr_val"
+}
+
+per_folder() {
+  local basedir
+  basedir="${1:?basedir is missing}"
+  find "$basedir" -name kubernetes.yml -print0 |
+  xargs -r -0 yq eval-all -o json . |
+  jq -r '
+    [ .spec.template.spec.containers[]?.env[]? ] | sort_by(.name)[] |
+      "\(.name) \(.valueFrom.secretKeyRef.name | values | @sh) \(.valueFrom.secretKeyRef.key | values | @sh)"' |
+  awk '!uniq[$1]++' |
+  sort |
+  xargs -r -n3 bash "$0" per_line
+}
+
+per_yml() {
+  yq . -o json "${1:?Missing kubectl deploy manifest to scrape envvars}" |
+  jq -r '
+    [ .spec.template.spec.containers[]?.env[]? ] | sort_by(.name)[] |
+      "\(.name) \(.valueFrom.secretKeyRef.name | values | @sh) \(.valueFrom.secretKeyRef.key | values | @sh)"' |
+  awk '!uniq[$1]++' |
+  sort -u |
+  xargs -r -t -n3 "$0" per_line
+}
+
+main() {
+  local basedir
+  basedir=${1:-}
+  if test -z "${basedir:-}" && [[ "${PWD##*/}" = 'pagopop-server' ]]; then
+    basedir=$PWD
+  fi
+  : ${basedir:?Missing folder param}
+
+  per_folder "$basedir"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  case "${1:-main}" in
+    per_line)
+      shift
+      per_line "$@"
+      ;;
+    per_yml)
+      shift
+      per_yml "$@"
+      ;;
+    main)
+      shift
+      main "$@"
+      ;;
+  esac
+fi
+

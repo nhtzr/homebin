@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+main() {
+  if test -z "$(docker ps -qf label=socks=server)"; then
+    docker run -d --label socks=server --rm -v "$HOME/sshd_config:/etc/ssh/sshd_config" -v "$HOME/.ssh/authorized_keys:/root/.ssh/authorized_keys" -p 2222:22 docker.io/sickp/alpine-sshd:latest
+    sleep 5
+  fi
+  while ! nc -z -w5 localhost 2222 >/dev/stderr; do
+    sleep 1
+  done
+  while ! ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=accept-new root@localhost -p 2222 true; do
+    sleep 1
+  done
+  exec ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=accept-new -D 1337 root@localhost -p 2222 -N
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

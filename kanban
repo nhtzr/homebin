@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+if test -z "$(docker ps -qf ancestor=mattermost/focalboard)"; then
+  docker run -d --rm -v "$HOME/.config/focalboard-data:/data" -p 80:8000 mattermost/focalboard
+fi
+while ! nc -z -w5 localhost 80 >/dev/stderr; do
+  sleep 1
+done
+exec open http://localhost
+

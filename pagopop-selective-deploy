@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+
+: ${REPO_URL:?}
+
+check_dependencies() {
+  local message
+  message='Missing dependency'
+  if ! command -v jq   > /dev/null; then printf '%s: %s\n' "$message" jq;   return 1;fi
+  if ! command -v curl > /dev/null; then printf '%s: %s\n' "$message" curl; return 1;fi
+}
+
+check_github_token() {
+  if test -n "${GITHUB_TOKEN:-}"; then
+    return
+  fi
+  if test -s "${GITHUB_TOKENFILE:=$HOME/.config/tokens/github}"; then
+    GITHUB_TOKEN=$(cat "$GITHUB_TOKENFILE")
+    return
+  fi
+  echo "Missing GITHUB_TOKEN and $GITHUB_TOKENFILE"
+  return 1
+}
+
+pagopop-selective-payload() {
+jq -nec '
+{
+  dev: "master",
+  qa: "qa",
+  staging: "qa",
+  prod: "prod",
+  dr: "dr",
+} as $branches |
+{
+  "event_type": "selective-build-and-deploy",
+  "client_payload": {
+    "env": $env,
+    "branch": ($ARGS.named.branch // $branches[$env]),
+    "prod_key": $ARGS.named.prod_key,
+    "services": $ARGS.positional,
+  }
+} |
+.client_payload.services|=select(length > 0) |
+.client_payload.prod_key|=select(length > 0)
+' "$@"
+}
+
+main() {
+  # check args
+  env="${1:?Missing env}"
+  if (test "$env" = prod || test "$env" = dr); then : "${prod_key:?Missing prod_key}"; fi
+  shift
+  : "${1:?Missing service list use --all for deploying all services at once}"
+  if test "$1" = '--all'; then shift; fi
+
+  check_github_token
+  check_dependencies
+
+  curl $REPO_URL \
+    --data-binary '@'<(pagopop-selective-payload --arg env "$env" ${branch:+--arg} ${branch:+branch} ${branch-} ${prod_key:+--arg} ${prod_key:+prod_key} ${prod_key-} --args "$@" | tee /dev/stderr) \
+    -H "Authorization: token $GITHUB_TOKEN" \
+    -H "Accept: application/vnd.github.v3+json" && echo 'done. Go to https://github.com/fintechdigitalventure/pagopop-server/actions/workflows/selective-build-and-deploy.yml to validate logs'
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+
+
+main() {
+  local client_id
+  local header_q
+  local current_q
+  : ${client_id:?}
+  : ${client_password:?}
+  : ${OAUHT_HOST_PREFIX:?}
+  token_q=.access_token
+  header_q='"Authorization: Bearer \(.access_token)"'
+
+  if [[ "${1:-}" == '-h' ]]; then
+    current_q=$header_q
+  else
+    current_q=$token_q
+  fi
+
+  exec curl -XPOST \
+    -u "$client_id:$client_password" \
+    'https://$OAUHT_HOST_PREFIX.us-east-1.amazoncognito.com/oauth2/token' \
+    -H 'Content-type: application/x-www-form-urlencoded' \
+    -d grant_type=client_credentials \
+    -d "client_id=$client_id" |
+    jq "$current_q" -r
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

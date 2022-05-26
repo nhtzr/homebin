@@ -8,7 +8,7 @@ else
   TTY_FLAG=''
 fi
 
-docker run --rm -i           \
+exec docker run --rm -i      \
   ${TTY_FLAG}                \
   ${DEPLOY_KEYS_FLAG}        \
   -v "$CURR_DIR:${WORK_DIR}" \
