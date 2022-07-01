@@ -1,7 +1,49 @@
 #!/usr/bin/env bash
 
-awk -F, 'FNR==NR { a[$1]; next } $2 && !($2 in a) {print substr($1, 12)}' \
-  <( git for-each-ref refs/remotes --format="%(refname)" ) \
-  <( git for-each-ref refs/heads --format="%(refname),%(upstream)" ) |
-  xargs -r git branch -d
+
+
+#    Find branches with missing remote tracking
+#    Both branches checking out a remote and those pushed with git push -u
+#    Might end up dangling as the remote repo merges and cleans branches
+#    Therefore we will try to find those dangling branches
+#    -- This asumes prune-remotes was run before this
+find_branches_with_missing_remote_tracking() {
+   awk -F, 'FNR==NR { a[$1]; next } $2 && !($2 in a) {print $1}' \
+      <( git for-each-ref refs/remotes --format="%(refname)"             ) \
+      <( git for-each-ref refs/heads   --format="%(refname),%(upstream)" )
+}
+
+
+#    Delete a branch.
+#    Asumes given branch has a missing remote tracking ref
+#    must be fully merged in origin/master or a origin/release- branch
+safe_delete() {
+  local refname
+  refname="${1:?}"
+  for remote in "${release_branches[@]}"
+  do
+    if test 0 = "$( git rev-list --cherry-pick --left-right "$remote"..."$refname" | wc -l )"; then
+      echo "$( git branch -D "${refname##refs/heads/}" ) --> $remote" > /dev/stderr
+      return
+    fi
+  done
+  echo "$refname has not been merged" > /dev/stderr
+}
+
+main() {
+  declare -a release_branches
+  mapfile -t release_branches < <(echo refs/remotes/origin/master; git for-each-ref 'refs/remotes/origin/release-*.x' --format="%(refname)")
+  mapfile -t branches_with_pruned_remotes < <( find_branches_with_missing_remote_tracking )
+
+  for refname in "${branches_with_pruned_remotes[@]}"
+  do
+    safe_delete "$refname"
+  done
+}
+
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
 
