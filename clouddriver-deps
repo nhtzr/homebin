@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+if test -z "$(docker ps -f ancestor=mysql:5.7 -q)"; then docker run -d -e MYSQL_CD_MIGRATE_PASSWORD=changeme -e MYSQL_CD_PASSWORD=changeme -e MYSQL_F50_MIGRATE_PASSWORD=changeme -e MYSQL_F50_PASSWORD=changeme -e MYSQL_ORCA_MIGRATE_PASSWORD=changeme -e MYSQL_ORCA_PASSWORD=changeme -e MYSQL_ROOT_PASSWORD=changeme -e MYSQL_ROOT_PASSWORD=changeme -v "$HOME/.spinnaker/mysql:/docker-entrypoint-initdb.d" --publish 3306:3306 mysql:5.7 ; fi
+if test -z "$(docker ps -f ancestor=redis:latest -q)"; then docker run -d --publish 6379:6379 docker.io/redis:latest; fi
+

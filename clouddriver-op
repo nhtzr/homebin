@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+
+# Requires latest yq (tested w/ yq (https://github.com/mikefarah/yq/) version 4.12.0)
+
+submit-op() {
+  curl -sSf -XPOST localhost:7002/kubernetes/ops -d @'/dev/stdin' -H 'Content-Type: application/json' -vv
+}
+
+watch-task() {
+  local resourceUri
+  resourceUri="$(jq -re '.resourceUri | values')"
+  : "${resourceUri:?No resource id was found}"
+  until (
+    curl -sSf -vv "localhost:7002$resourceUri" |
+      jq -e 'if .status.completed then . else empty end'
+  ); do sleep 5; done
+}
+
+mapToJsonStream() {
+  while test $# -gt 0
+  do
+    if test -d "$1"; then
+      find "$1" -name '*.yml' -or -name '*.yaml' -exec yq ea -o json {} \;
+      shift
+      continue
+    fi
+    yq ea -o json "$1"
+    shift
+  done
+}
+
+write-deploy-op() {
+ mapToJsonStream "$@" |
+   jq -Mcnse '[{deployManifest: {$account, $cloudProvider, $manifestArtifactAccount, moniker: {$app, $cluster}, manifests: input}}]' \
+    --arg account "${account:-account1}" \
+    --arg cloudProvider "${provider:-kubernetes}" \
+    --arg manifestArtifactAccount embedded-artifact \
+    --arg app "${app:-}" \
+    --arg cluster "${spinCluster:-}"
+
+}
+
+write-patch-operation() {
+  mapToJsonStream "$@" |
+    jq -Mcnse '[{patchKubernetesManifest: {$account, $cloudProvider, $manifestArtifactAccount, $manifestName, $location, options: {$mergeStrategy, $record}, patchBody: input}}]' \
+      --arg account "${account:-account1}" \
+      --arg cloudProvider "${provider:-kubernetes}" \
+      --arg manifestArtifactAccount embedded-artifact \
+      --jsonArg record "${record:-false}" \
+      --arg mergeStrategy "${mergeStrategy:-strategic}" \
+      --arg location "${location:-default}" \
+      --arg manifestName "${manifestName:?}" \
+
+}
+
+main() {
+  usage="usage: $0 [submit|write] [deploy|patch] <manifest-files>"
+  case "${1:?$usage}" in
+    write)
+      shift
+      case "${1:?$usage}" in
+        deploy)
+          shift
+          write-deploy-op "$@"
+          ;;
+        patch)
+          shift
+          write-patch-operation "$@"
+          ;;
+        *)
+          echo "$usage"
+          ;;
+      esac
+      ;;
+    submit)
+      shift
+      case "${1:?$usage}" in
+        deploy)
+          shift
+          write-deploy-op "$@" |
+            tee >(jq -C . >/dev/stderr) |
+            submit-op |
+            tee >(jq -C . >/dev/stderr) |
+            watch-task
+          ;;
+        patch)
+          shift
+          write-patch-operation "$@" |
+            tee >(jq -C . >/dev/stderr) |
+            submit-op |
+            tee >(jq -C . >/dev/stderr) |
+            watch-task
+          ;;
+        *)
+          echo "$usage"
+          ;;
+      esac
+      ;;
+    *)
+      echo "$usage"
+      ;;
+  esac
+}
+
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

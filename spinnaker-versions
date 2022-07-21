@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+main() {
+  curl -Ss "$baseUrl/versions.yml" | yq ea '.versions|=(sort_by(.version)|reverse)'
+}
+
+version() {
+  curl -Ss "$baseUrl/bom/$1.yml" | yq ea
+}
+
+
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  baseUrl=https://storage.googleapis.com/halconfig
+  if test -n "${armory:-}"; then
+    baseUrl=https://halconfig.s3-us-west-2.amazonaws.com
+  fi
+  case "${1:-list}" in
+    list)
+      shift
+      main "$@"
+      ;;
+    --help|-h|help)
+      echo "usage: $0 [list|show <spinnaker-version>]" '' >/dev/stderr
+      ;;
+    show|version)
+      shift
+      version "$@"
+      ;;
+  esac
+fi
+
