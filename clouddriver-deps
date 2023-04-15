@@ -1,5 +1,29 @@
 #!/usr/bin/env bash
 
-if test -z "$(docker ps -f ancestor=mysql:5.7 -q)"; then docker run -d -e MYSQL_CD_MIGRATE_PASSWORD=changeme -e MYSQL_CD_PASSWORD=changeme -e MYSQL_F50_MIGRATE_PASSWORD=changeme -e MYSQL_F50_PASSWORD=changeme -e MYSQL_ORCA_MIGRATE_PASSWORD=changeme -e MYSQL_ORCA_PASSWORD=changeme -e MYSQL_ROOT_PASSWORD=changeme -e MYSQL_ROOT_PASSWORD=changeme -v "$HOME/.spinnaker/mysql:/docker-entrypoint-initdb.d" --publish 3306:3306 mysql:5.7 ; fi
-if test -z "$(docker ps -f ancestor=redis:latest -q)"; then docker run -d --publish 6379:6379 docker.io/redis:latest; fi
+start_() {
+  if test -z "$(docker ps -f ancestor=mysql:5.7 -q)"; then docker run -d --rm -e MYSQL_CD_MIGRATE_PASSWORD=changeme -e MYSQL_CD_PASSWORD=changeme -e MYSQL_F50_MIGRATE_PASSWORD=changeme -e MYSQL_F50_PASSWORD=changeme -e MYSQL_ORCA_MIGRATE_PASSWORD=changeme -e MYSQL_ORCA_PASSWORD=changeme -e MYSQL_ROOT_PASSWORD=changeme -e MYSQL_ROOT_PASSWORD=changeme -v "$HOME/.spinnaker/mysql:/docker-entrypoint-initdb.d" --publish 3306:3306 mysql:5.7 ; fi
+  # if test -z "$(docker ps -f ancestor=redis:latest -q)"; then docker run -d --rm --publish 6379:6379 docker.io/redis:latest; fi
+  if ! k3d cluster get k3s-default --no-headers; then k3d cluster create; fi
+}
+
+stop_() {
+  docker ps -f ancestor=mysql:5.7 -q | xargs -r docker stop
+  k3d cluster delete k3s-default
+}
+
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  case "${1:-start}" in
+    start)
+      start_ "$@"
+      ;;
+    stop)
+      stop_ "$@"
+      ;;
+    *)
+      echo 'usage: clouddriver-deps start|stop'
+      ;;
+  esac
+fi
 

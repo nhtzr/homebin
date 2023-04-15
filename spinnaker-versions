@@ -21,12 +21,12 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
       shift
       main "$@"
       ;;
-    --help|-h|help)
-      echo "usage: $0 [list|show <spinnaker-version>]" '' >/dev/stderr
-      ;;
     show|version)
       shift
       version "$@"
+      ;;
+    *,--help|-h|help)
+      echo "usage: $0 [list|show <spinnaker-version>]" '' >/dev/stderr
       ;;
   esac
 fi

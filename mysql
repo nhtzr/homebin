@@ -1,5 +1,9 @@
-#!/usr/bin/env whalebrew
-image: mysql
-entrypoint: [ mysql ]
-volumes:
-- mysql-history:/root
+#!/usr/bin/env bash
+
+if [[ -t 0 ]]; then
+  TTY_FLAG='t'
+else
+  TTY_FLAG=''
+fi
+
+exec docker exec -i"$TTY_FLAG" "$( docker ps -q -f ancestor=mysql:5.7.22 )" mysql clouddriver

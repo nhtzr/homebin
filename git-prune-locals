@@ -27,12 +27,12 @@ safe_delete() {
       return
     fi
   done
-  echo "$refname has not been merged" > /dev/stderr
+  echo "${refname##refs/heads/} has not been merged" > /dev/stderr
 }
 
 main() {
   declare -a release_branches
-  mapfile -t release_branches < <(echo refs/remotes/origin/master; git for-each-ref 'refs/remotes/origin/release-*.x' --format="%(refname)")
+  mapfile -t release_branches < <(git for-each-ref 'refs/remotes/origin/master' 'refs/remotes/origin/release-*.x' --format="%(refname)")
   mapfile -t branches_with_pruned_remotes < <( find_branches_with_missing_remote_tracking )
 
   for refname in "${branches_with_pruned_remotes[@]}"

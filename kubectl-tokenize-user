@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
 
+set -ueo pipefail
+
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+if [[ -z "$KUBECONFIG" ]]; then exit 1; fi
 KUBEUSER="${KUBEUSER:-$(
-    yq r -j "$KUBECONFIG" |
+    yq ea -o json "$KUBECONFIG" |
       jq -re '
         .["current-context"] as $current_context |
         .contexts[] | select(.name == $current_context) | .context.user'
 )}"
+if [[ -z "$KUBEUSER" ]]; then exit 1; fi
 TOKEN="${TOKEN:-$(
-    yq r -j "$KUBECONFIG" |
-      bash -c "$(
-          jq -re '
-            first(.users[] | select(.name == $current_user)).user.exec |
-            ([.command] + .args | map(@sh) | join(" "))
-          ' --arg current_user "$KUBEUSER"
-      )" |
+    yq ea -o json "$KUBECONFIG" |
+      jq -re '
+        first(.users[] | select(.name == $current_user)).user.exec |
+        ([.command] + .args | map(@sh) | join(" "))
+      ' --arg current_user "$KUBEUSER" |
+      bash -uexo pipefail |
       jq -re .status.token
 )}"
+if [[ -z "$TOKEN" ]]; then exit 1; fi
 
 kubectl config set-credentials "${KUBEUSER}" --token="${TOKEN}"
 

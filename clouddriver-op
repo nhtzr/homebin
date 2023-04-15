@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+usage="usage: $0 [submit|write] [deploy|patch] <manifest-files>"
 # Requires latest yq (tested w/ yq (https://github.com/mikefarah/yq/) version 4.12.0)
 
 submit-op() {
@@ -19,6 +20,10 @@ watch-task() {
 mapToJsonStream() {
   while test $# -gt 0
   do
+    if ! test -e "$1"; then
+      echo "manifest does not exist: $1" >&2
+      return 1
+    fi
     if test -d "$1"; then
       find "$1" -name '*.yml' -or -name '*.yaml' -exec yq ea -o json {} \;
       shift
@@ -29,13 +34,16 @@ mapToJsonStream() {
   done
 }
 
-write-deploy-op() {
+write-deploy-operation() {
+ if test -z "${app:-}"; then
+   app=$(mapToJsonStream "$@" | jq -Mcnser 'first(input[].metadata.name)')
+ fi
  mapToJsonStream "$@" |
    jq -Mcnse '[{deployManifest: {$account, $cloudProvider, $manifestArtifactAccount, moniker: {$app, $cluster}, manifests: input}}]' \
-    --arg account "${account:-account1}" \
-    --arg cloudProvider "${provider:-kubernetes}" \
+    --arg account "${account:-account1}"            \
+    --arg cloudProvider "${provider:-kubernetes}"   \
     --arg manifestArtifactAccount embedded-artifact \
-    --arg app "${app:-}" \
+    --arg app "${app:-}"                            \
     --arg cluster "${spinCluster:-}"
 
 }
@@ -43,58 +51,55 @@ write-deploy-op() {
 write-patch-operation() {
   mapToJsonStream "$@" |
     jq -Mcnse '[{patchKubernetesManifest: {$account, $cloudProvider, $manifestArtifactAccount, $manifestName, $location, options: {$mergeStrategy, $record}, patchBody: input}}]' \
-      --arg account "${account:-account1}" \
-      --arg cloudProvider "${provider:-kubernetes}" \
-      --arg manifestArtifactAccount embedded-artifact \
-      --jsonArg record "${record:-false}" \
+      --arg account "${account:-account1}"              \
+      --arg cloudProvider "${provider:-kubernetes}"     \
+      --arg manifestArtifactAccount embedded-artifact   \
+      --jsonArg record "${record:-false}"               \
       --arg mergeStrategy "${mergeStrategy:-strategic}" \
-      --arg location "${location:-default}" \
-      --arg manifestName "${manifestName:?}" \
+      --arg location "${location:-default}"             \
+      --arg manifestName "${manifestName:?}"            \
 
 }
 
+write-operation() {
+  case "${1:?$usage}" in
+    deploy)
+      shift
+      echo write-deploy-operation
+      ;;
+    patch)
+      shift
+      echo write-patch-operation
+      ;;
+    *)
+      echo "$usage" >&2
+      return 1
+      ;;
+  esac
+}
+
 main() {
-  usage="usage: $0 [submit|write] [deploy|patch] <manifest-files>"
+  local dependency
   case "${1:?$usage}" in
     write)
       shift
-      case "${1:?$usage}" in
-        deploy)
-          shift
-          write-deploy-op "$@"
-          ;;
-        patch)
-          shift
-          write-patch-operation "$@"
-          ;;
-        *)
-          echo "$usage"
-          ;;
-      esac
+      dependency=$(write-operation "$@")
+      : ${dependency:?Unexpected param ${2:-} }
+      shift
+
+      "$dependency" "$@"
       ;;
     submit)
       shift
-      case "${1:?$usage}" in
-        deploy)
-          shift
-          write-deploy-op "$@" |
-            tee >(jq -C . >/dev/stderr) |
-            submit-op |
-            tee >(jq -C . >/dev/stderr) |
-            watch-task
-          ;;
-        patch)
-          shift
-          write-patch-operation "$@" |
-            tee >(jq -C . >/dev/stderr) |
-            submit-op |
-            tee >(jq -C . >/dev/stderr) |
-            watch-task
-          ;;
-        *)
-          echo "$usage"
-          ;;
-      esac
+      dependency=$(write-operation "$@")
+      : ${dependency:?Unexpected param ${2:-} }
+      shift
+
+      $dependency "$@"              |
+        tee >(jq -C . >/dev/stderr) |
+        submit-op                   |
+        tee >(jq -C . >/dev/stderr) |
+        watch-task
       ;;
     *)
       echo "$usage"
