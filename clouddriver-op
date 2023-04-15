@@ -9,28 +9,53 @@ submit-op() {
 
 watch-task() {
   local resourceUri
-  resourceUri="$(jq -re '.resourceUri | values')"
-  : "${resourceUri:?No resource id was found}"
-  until (
-    curl -sSf -vv "localhost:7002$resourceUri" |
-      jq -e 'if .status.completed then . else empty end'
-  ); do sleep 5; done
+  resourceUri=$(jq -r '.resourceUri | values | @sh')
+  if [[ -z "$resourceUri" ]]; then
+    echo "Error: No resource id was found" >&2
+    return 1
+  fi
+
+  while ! curl -sSf -vv "localhost:7002$resourceUri" |
+      jq -e 'if .status.completed then . else empty end'; do
+    sleep 5
+  done
+}
+
+watch-task-jitter() {
+  local MAX_BACKOFF=120
+  local current_backoff=6
+  local current_deadline=$(($(date +%s) + current_backoff))
+  while ! curl -sSf -vv "localhost:7002$resourceUri" |
+      jq -e 'if .status.completed then . else empty end' > /dev/null; do
+    if [[ $(date +%s) -ge $current_deadline ]]; then
+      current_backoff=$((current_backoff * 2))
+      if [[ $current_backoff -gt MAX_BACKOFF ]]; then
+        current_backoff=$MAX_BACKOFF
+      fi
+      local jitter=$((RANDOM % (JITTER * 2 + 1) - JITTER))
+      current_deadline=$(($(date +%s) + current_backoff + jitter))
+    fi
+    set -x
+    sleep $(( current_deadline - $(date +%s) ))
+    set +x
+  done
+}
 }
 
 mapToJsonStream() {
-  while test $# -gt 0
+  local file
+  for file in "$@"
   do
-    if ! test -e "$1"; then
-      echo "manifest does not exist: $1" >&2
+    if [[ ! -e "$file" ]]; then
+      echo "Error: File or directory does not exist: $file" >&2
       return 1
     fi
-    if test -d "$1"; then
-      find "$1" -name '*.yml' -or -name '*.yaml' -exec yq ea -o json {} \;
-      shift
-      continue
+
+    if [[ -d "$file" ]]; then
+      find "$file" -name '*.yml' -o -name '*.yaml' -exec yq ea -o json {} \;
+    else
+      yq ea -o json "$file"
     fi
-    yq ea -o json "$1"
-    shift
   done
 }
 
