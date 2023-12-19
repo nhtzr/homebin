@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-git log "${1:?branch missing}" --pretty=oneline --abbrev-commit --first-parent |
+git log "${1:?branch missing}" --pretty=oneline --abbrev-commit --first-parent -- |
   awk -F'#' '$2 != "" {print $2; next} $3 != "" {print $3}' |
+  awk '{print $1}' |
   tr -d '()"' |
   sort -V
 

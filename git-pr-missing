@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+# Usage print PRs that are missing and need a backport to the current branch
+# It will use the git log --online command to format the PRs
+main() {
+  export LC_ALL=C
+  branch=${1:-HEAD}
+
+  compare-show-only-left                   \
+    <(alphabetical-sort-prs origin/master) \
+    <(alphabetical-sort-prs "$branch")     |
+    recent-sort-format-pr-list
+}
+
+
+# lets untangle
+compare-show-only-left() {
+# comm compares two line lists and writes lines exlusive to left, lines exlusive to right, and common lines
+# each indented to the left middle and right column
+# flag -23 supresses exclusive right and common lines
+# allows only exlusive left column
+  comm -23 "$@"
+}
+
+alphabetical-sort-prs() {
+# comm can only do comparisons in alphabetical order, so use that
+  git pr-list "$@" | sort
+}
+
+recent-sort-format-pr-list() {
+# enduser wont like plain numbers. Show the actual commit related to that PR
+# More recent PRs are more relevant that forgotten older PRs
+  sort -V | xargs -L1 -r git log --oneline origin/master --grep
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+exec watch -cx http -I -p Hb --pretty all "$@"
+

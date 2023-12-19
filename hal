@@ -9,7 +9,8 @@ HAL_OPT=()
 #          -e 'AWS_ACCESS_KEY_ID='     \
 #          -e 'AWS_SECRET_ACCESS_KEY=' \
 #          -e 'AWS_SESSION_TOKEN=')
-HAL_IMAGE='docker.io/armory/halyard-armory:1.8.3'
+#HAL_IMAGE='docker.io/armory/halyard-armory:1.8.3'
+HAL_IMAGE='armory-docker-local.jfrog.io/armory/halyard:operator-a6ac1d4'
 
 if test -z "$(docker ps -q --filter name="$CONTAINER_NAME" || true)" &&
   test "${1:-}" != shutdown; then
@@ -24,5 +25,6 @@ if test -z "$(docker ps -q --filter name="$CONTAINER_NAME" || true)" &&
   docker exec -it "$CONTAINER_NAME" bash -c 'while true; do sleep 0; if nc -z -w5 127.0.0.1 "${halport:-8064}" > /dev/stderr; then break; fi; sleep 2; done'
 fi
 
+set -x
 docker exec -it "$CONTAINER_NAME" "${@+hal}" "${@-bash}"
 

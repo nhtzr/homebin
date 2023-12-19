@@ -1,0 +1,3 @@
+#!/usr/bin/env jq -rf
+
+[""] + path(.. | scalars) | map(if type == "number" then "[" + tostring + "]" else tostring end) | join(".")

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash 
+
+username=$(awk -F= '$1 == "artifactory_user" {print $2}' .gradle/gradle.properties)
+awk -F= '$1 == "artifactory_password" {print $2}' .gradle/gradle.properties | docker login --password-stdin armory-docker-all.jfrog.io --username "$username"

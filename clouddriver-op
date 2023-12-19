@@ -3,13 +3,18 @@
 usage="usage: $0 [submit|write] [deploy|patch] <manifest-files>"
 # Requires latest yq (tested w/ yq (https://github.com/mikefarah/yq/) version 4.12.0)
 
+validate_account() {
+  curl -sSf localhost:7002/credentials | jq -e '.[] | select(.name == $account)' --arg account "${account:-account1}"
+}
+
+
 submit-op() {
   curl -sSf -XPOST localhost:7002/kubernetes/ops -d @'/dev/stdin' -H 'Content-Type: application/json' -vv
 }
 
 watch-task() {
   local resourceUri
-  resourceUri=$(jq -r '.resourceUri | values | @sh')
+  resourceUri="$(jq -r '.resourceUri | values')"
   if [[ -z "$resourceUri" ]]; then
     echo "Error: No resource id was found" >&2
     return 1
@@ -22,24 +27,26 @@ watch-task() {
 }
 
 watch-task-jitter() {
+  set -x
   local MAX_BACKOFF=120
-  local current_backoff=6
+  local current_backoff=2
   local current_deadline=$(($(date +%s) + current_backoff))
   while ! curl -sSf -vv "localhost:7002$resourceUri" |
-      jq -e 'if .status.completed then . else empty end' > /dev/null; do
+      jq -e 'if .status.completed then . else empty end'; do
     if [[ $(date +%s) -ge $current_deadline ]]; then
-      current_backoff=$((current_backoff * 2))
-      if [[ $current_backoff -gt MAX_BACKOFF ]]; then
+      current_backoff=$((current_backoff * 16 / 10))
+      if [[ $current_backoff -gt $MAX_BACKOFF ]]; then
         current_backoff=$MAX_BACKOFF
       fi
-      local jitter=$((RANDOM % (JITTER * 2 + 1) - JITTER))
+      local MINIMUM=$(( current_backoff * 2 / 10 ))
+      local jitter=$(( $RANDOM / 10 * $current_backoff * 2 / 32767 + $MINIMUM ))
       current_deadline=$(($(date +%s) + current_backoff + jitter))
     fi
-    set -x
-    sleep $(( current_deadline - $(date +%s) ))
-    set +x
+    local now=$(date +%s)
+    local mydiff=$(( $current_deadline - $now ))
+    sleep $mydiff
   done
-}
+  set +x
 }
 
 mapToJsonStream() {
@@ -132,9 +139,12 @@ main() {
   esac
 }
 
-
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   set -ueo pipefail
+  if ! validate_account; then
+    echo "use 'account' envvar check first GET :7002/credentials"
+    exit 1
+  fi
   main "$@"
 fi
 

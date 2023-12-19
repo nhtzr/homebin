@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+
+usage() {
+  echo "Usage: $0 publish-release-notes <published_at> <release_body> <commit_sha> <tag_name>"
+  echo ""
+  echo "Arguments:"
+  echo "  <published_at>: Date when the release is published (required)"
+  echo "  <release_body>: Release notes (required)"
+  echo "  <commit_sha>:   SHA of the commit being released (required)"
+  echo "  <tag_name>:     Tag for the release (required)"
+  echo ""
+  echo "Example:"
+  echo "  "'publish-release-notes "2023-04-15T15:30:00Z" "This is a new release" "abc123" "v1.0.0"'
+}
+
+
+get-release-notes() {
+  local tag_name
+  tag_name="${1:?tag missing}"
+  curl -Ssf "https://api.github.com/repos/$repo/releases/tags/$tag_name" \
+    -H 'Accept: application/vnd.github.v3+json' \
+    -H "Authorization: token $(cat ~/.config/token/github)" |
+    jq -e '
+      {$event_type,
+        client_payload: {
+            commit_sha:   .target_commitish,
+            tag_name:     .tag_name,
+            published_at: .published_at,
+            release_body: .body}}' --arg event_type 'release-notes'
+}
+
+publish-github-release() {
+  local tag_name
+  tag_name="${1:?tag missing}"
+  curl -Ssf "https://api.github.com/repos/$repo/releases/tags/$tag_name" \
+    -H 'Accept: application/vnd.github.v3+json' \
+    -H "Authorization: token $(cat ~/.config/token/github)" |
+    jq -e '
+      {$event_type,
+        client_payload: {
+            commit_sha:   .target_commitish,
+            tag_name:     .tag_name,
+            published_at: .published_at,
+            release_body: .body}}' --arg event_type 'release-notes' |
+    tee /dev/stderr |
+    curl -sSf "https://api.github.com/repos/$repo/dispatches"       \
+      -H 'Accept: application/vnd.github.everest-preview+json' \
+      -H "Authorization: token $(cat ~/.config/token/github)"  \
+      -H 'Content-Type: application/json; charset=utf-8'       \
+      --data-binary @-
+}
+
+publish-release-notes() {
+  local published_at
+  local release_body
+  local commit_sha
+  local tag_name
+  published_at="${1:?missing date}"
+  release_body="${2:?missing notes}"
+  commit_sha="${3:?missing commit}"
+  tag_name="${4:?tag missing}"
+
+  curl "https://api.github.com/repos/$repo/dispatches"       \
+    -H 'Accept: application/vnd.github.everest-preview+json' \
+    -H "Authorization: token $(cat ~/.config/token/github)"  \
+    -H 'Content-Type: application/json; charset=utf-8'       \
+    --data-binary @<(                                        \
+      RELEASE_BODY="$release_body" jq -n '
+        {$event_type,
+          client_payload:{
+            $commit_sha, $tag_name, $published_at,
+            release_body: env.RELEASE_BODY}}'                \
+              --arg event_type   'release-notes'             \
+              --arg commit_sha   "$commit_sha"               \
+              --arg tag_name     "$tag_name"                 \
+              --arg published_at "$published_at")
+
+}
+
+main() {
+  repo="${repo:-armory-io/agent-k8s}"
+  case "$1" in
+    publish-github-release)
+      shift
+      publish-github-release "$@"
+      ;;
+
+    get-release-notes)
+      shift
+      get-release-notes "$@"
+      ;;
+
+    publish-release-notes)
+      shift
+      publish-release-notes "$@"
+      ;;
+
+    -?|--help|-h|*)
+      usage >&2
+      ;;
+  esac
+}
+
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+

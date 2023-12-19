@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+help() {
+  echo "Usage: $0 [provision|activate|delete] [options...]"
+  echo
+  echo "Subcommands:"
+  echo "  provision <name> <kubeconfig> [zoneId] Provision a new dynamic account"
+  echo "  activate  <name>                       Activate an existing dynamic account"
+  echo "  delete    <name>                       Delete an existing dynamic account"
+  echo
+  echo "Options:"
+  echo "  -h, --help                             Display this help message and exit"
+}
+
+main() {
+  case $1 in
+    -h|--help)
+      help
+      exit 0
+      ;;
+    provision|activate|delete|help)
+      "$1" "${@:2}"
+      ;;
+    *)
+      echo "Invalid subcommand: $1" >&2
+      echo
+      help >&2
+      exit 1
+      ;;
+  esac
+}
+
+provision() {
+  jq -nc '[{$name,$zoneId,$kubeconfigContents}]'             \
+    --arg state INACTIVE                                     \
+    --arg name  "${1:?missing acount name}"                  \
+    --rawfile kubeconfigContents "${2:?missing kube config}" \
+    --arg zoneId "${3:-}" |
+    http -p=Bh POST :7002/armory/accounts/dynamic
+}
+
+activate() {
+  jq -nc '[{$name,$state}]' --arg state ACTIVE --arg name "${1:?missing account name}" |
+    http -p=Bh PATCH :7002/armory/accounts
+}
+
+delete() {
+  jq -n '$ARGS.positional' --args "$@" |
+    http -p=Bh DELETE :7002/armory/accounts
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -ueo pipefail
+  main "$@"
+fi
+
